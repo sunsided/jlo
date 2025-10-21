@@ -141,7 +141,11 @@ fn process_reader<R: Read, W: Write>(
                     }
                 }
             }
-            Err(_) => { /* ignore */ }
+            Err(_) => {
+                // Not valid JSON: print the original line as-is
+                out.write_all(&buf)?;
+                out.write_all(b"\n")?;
+            }
         }
     }
     Ok(())
@@ -149,17 +153,19 @@ fn process_reader<R: Read, W: Write>(
 
 /// Helper: write key=value for string-ish fields if present & non-empty.
 pub(crate) fn write_kv_str<W: Write>(mut out: W, key: &str, val: Option<&str>) -> io::Result<()> {
-    if let Some(s) = val {
-        if !s.is_empty() {
-            write!(out, " {}=", key)?;
-            // bare if safe, else JSON-quoted
-            if s.chars().all(|c| c.is_ascii_graphic() && c != ' ' && c != '=') {
-                write!(out, "{}", s)?;
-            } else {
-                let mut buf = Vec::new();
-                serde_json::to_writer(&mut buf, &Value::String(s.to_string())).map_err(to_io_err)?;
-                out.write_all(&buf)?;
-            }
+    let Some(s) = val else {
+        return Ok(());
+    };
+    
+    if !s.is_empty() {
+        write!(out, " {}=", key)?;
+        // bare if safe, else JSON-quoted
+        if s.chars().all(|c| c.is_ascii_graphic() && c != ' ' && c != '=') {
+            write!(out, "{}", s)?;
+        } else {
+            let mut buf = Vec::new();
+            serde_json::to_writer(&mut buf, &Value::String(s.to_string())).map_err(to_io_err)?;
+            out.write_all(&buf)?;
         }
     }
     Ok(())
@@ -167,16 +173,19 @@ pub(crate) fn write_kv_str<W: Write>(mut out: W, key: &str, val: Option<&str>) -
 
 /// Helper: write key=value for numeric (f64) with trimmed trailing zeros.
 pub(crate) fn write_kv_num<W: Write>(mut out: W, key: &str, val: Option<f64>) -> io::Result<()> {
-    if let Some(mut f) = val {
-        if f == -0.0 {
-            f = 0.0;
-        }
-        write!(out, " {}=", key)?;
-        // Trim trailing zeros
-        let s = format!("{:.6}", f);
-        let s = s.trim_end_matches('0').trim_end_matches('.');
-        write!(out, "{}", s)?;
+    let Some(mut f) = val else {
+        return Ok(());
+    };
+    
+
+    if f == -0.0 {
+        f = 0.0;
     }
+    write!(out, " {}=", key)?;
+    // Trim trailing zeros
+    let s = format!("{:.6}", f);
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    write!(out, "{}", s)?;
     Ok(())
 }
 
