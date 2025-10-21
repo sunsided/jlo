@@ -65,6 +65,7 @@ impl Palette {
 pub(crate) struct RenderCtx {
     pub(crate) show_ts: bool,
     pub(crate) pal: Palette,
+    pub(crate) compact: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -77,7 +78,7 @@ fn main() -> io::Result<()> {
         ColorChoice::Always => true,
         ColorChoice::Never => false,
     };
-    let ctx = RenderCtx { show_ts: want_ts, pal: Palette::new(colors_enabled) };
+    let ctx = RenderCtx { show_ts: want_ts, pal: Palette::new(colors_enabled), compact: cli.compact };
 
     let stdout = io::stdout();
     let handle = stdout.lock();

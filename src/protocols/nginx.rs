@@ -46,12 +46,19 @@ impl JsonProtocol for Nginx {
         let host = o.get("host").and_then(Value::as_str).unwrap_or("");
         let remote_addr = o.get("remote_addr").and_then(Value::as_str);
 
+        // Compute indent for aligned continuation: [ts] + space + 5-char level + 1 space
+        let mut indent_cols: usize = 0;
         if ctx.show_ts {
-            if let Some(ts) = ts { write!(out, "[{}] ", ts)?; }
+            if let Some(ts) = ts {
+                write!(out, "[{}] ", ts)?;
+                indent_cols += 2 + ts.len() + 1; // '[' + ']' + ts + space
+            }
         }
 
-        // colored level
-        write!(out, "{}{}{} ", lvl_color, level, ctx.pal.reset)?;
+        // colored fixed-width level
+        let lvl_fixed = format!("{:<5}", level);
+        write!(out, "{}{}{} ", lvl_color, lvl_fixed, ctx.pal.reset)?;
+        indent_cols += 5 + 1;
         // status and request line (dim method/proto)
         write!(out, "{} {}{}{} ", status, ctx.pal.faint, method.unwrap(), ctx.pal.reset)?;
         if !host.is_empty() { write!(out, "{} ", host)?; }
@@ -60,7 +67,13 @@ impl JsonProtocol for Nginx {
         if !query.is_empty() { write!(out, "?{}", query)?; }
         if !protocol.is_empty() { write!(out, " {}{}{}", ctx.pal.faint, protocol, ctx.pal.reset)?; }
 
-        write!(out, " —")?;
+        if ctx.compact {
+            // stay on same line; next key/values will start with a leading space
+        } else {
+            out.write_all(b"\n")?;
+            let spaces = vec![b' '; indent_cols.saturating_sub(1)];
+            out.write_all(&spaces)?; // align continuation under message (account for leading space from key writer)
+        }
 
         write_kv_str(&mut *out, "bytes", o.get("bytes_sent").and_then(Value::as_u64).map(|n| n.to_string()).as_deref())?;
         write_kv_num(&mut *out, "rt", o.get("req_time").and_then(Value::as_f64))?;

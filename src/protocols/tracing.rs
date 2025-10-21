@@ -38,25 +38,46 @@ impl JsonProtocol for Tracing {
         let thread_id = obj.get("threadId").and_then(Value::as_str);
         let span = obj.get("span").and_then(Value::as_object).and_then(|s| s.get("name")).and_then(Value::as_str);
 
+        // Compute indent columns for continuation: [ts] + space (if any) + 5-char level + 1 space
+        let mut indent_cols: usize = 0;
         if ctx.show_ts && !timestamp.is_empty() {
             write!(out, "[{}] ", timestamp)?;
+            indent_cols += 2 + timestamp.len() + 1; // '[' + ']' + ts + space
         }
-        write!(out, "{}{}{} {} ", lvl_color, lvl, ctx.pal.reset, target.unwrap())?;
-        if let Some(span_name) = span {
-            write!(out, "({}) ", span_name)?;
-        }
-        write!(out, "— {}", message.unwrap())?;
+        // Fixed-width level (5 chars) and no dash before message
+        let lvl_fixed = format!("{:<5}", lvl);
+        write!(out, "{}{}{} ", lvl_color, lvl_fixed, ctx.pal.reset)?;
+        indent_cols += 5 + 1; // level field + space
+        write!(out, "{}", message.unwrap())?;
 
-        if let Some(tid) = thread_id { write!(out, " threadId={}", tid)?; }
+        if ctx.compact {
+            // Single-line: append logger/target and other details inline
+            write!(out, " logger={}", target.unwrap())?;
+            if let Some(span_name) = span { write!(out, " span={}", span_name)?; }
+            if let Some(tid) = thread_id { write!(out, " threadId={}", tid)?; }
+        } else {
+            // Pretty: move the logger/target and details to the next aligned continuation line
+            out.write_all(b"\n")?;
+            // write indent spaces to align under the message
+            let mut spaces = vec![b' '; indent_cols];
+            out.write_all(&spaces)?;
+            write!(out, "logger={}", target.unwrap())?;
+            if let Some(span_name) = span { write!(out, " span={}", span_name)?; }
+            if let Some(tid) = thread_id { write!(out, " threadId={}", tid)?; }
+        }
         if let Some(fobj) = fields {
             for (k, val) in fobj {
                 if k == "message" { continue; }
-                write!(out, " {}=", k)?;
+                if ctx.compact {
+                    write!(out, " {}=", k)?;
+                } else {
+                    write!(out, " {}=", k)?;
+                }
                 write_json_atom(&mut *out, val)?;
             }
         }
         if let Some(spans) = obj.get("spans").and_then(Value::as_array) {
-            if !spans.is_empty() { write!(out, " spans={}", spans.len())?; }
+            if !spans.is_empty() { write!(out, " spans=")?; write!(out, "{}", spans.len())?; }
         }
         out.write_all(b"\n")?;
         Ok(true)
