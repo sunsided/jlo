@@ -1,7 +1,9 @@
 [package]
 name = "logsniff"
 version = "0.1.0"
+repository = "https://github.com/sunsided/logsniff"
 edition = "2024"
+publish = false
 
 [dependencies]
 serde = "1.0"
