@@ -1,14 +1,14 @@
 mod pretty;
 mod protocols;
 
+use crate::pretty::TwoSpacePretty;
 use clap::{ArgAction, Parser, ValueEnum};
 use serde::Serialize;
 use serde_json::Value;
 use std::fs::File;
+use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader, LineWriter, Read, Write};
 use std::ops::DerefMut;
-use std::io::IsTerminal;
-use crate::pretty::TwoSpacePretty;
 
 /// jlo: read NDJSON/JSON Lines, reformat, flush per line, ignore non-JSON.
 #[derive(Parser, Debug)]
@@ -31,7 +31,11 @@ struct Cli {
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
-enum ColorChoice { Auto, Always, Never }
+enum ColorChoice {
+    Auto,
+    Always,
+    Never,
+}
 
 #[derive(Copy, Clone)]
 pub(crate) struct Palette {
@@ -49,15 +53,23 @@ impl Palette {
         if enabled {
             Self {
                 enabled,
-                info: "\x1b[32m",   // green
-                warn: "\x1b[33m",   // yellow
-                error: "\x1b[31m",  // red
+                info: "\x1b[32m",      // green
+                warn: "\x1b[33m",      // yellow
+                error: "\x1b[31m",     // red
                 status3xx: "\x1b[36m", // cyan
                 faint: "\x1b[2m",
                 reset: "\x1b[0m",
             }
         } else {
-            Self { enabled, info: "", warn: "", error: "", status3xx: "", faint: "", reset: "" }
+            Self {
+                enabled,
+                info: "",
+                warn: "",
+                error: "",
+                status3xx: "",
+                faint: "",
+                reset: "",
+            }
         }
     }
 }
@@ -79,14 +91,23 @@ fn main() -> io::Result<()> {
         ColorChoice::Always => true,
         ColorChoice::Never => false,
     };
-    let ctx = RenderCtx { show_ts: want_ts, pal: Palette::new(colors_enabled), compact: cli.compact };
+    let ctx = RenderCtx {
+        show_ts: want_ts,
+        pal: Palette::new(colors_enabled),
+        compact: cli.compact,
+    };
 
     let stdout = io::stdout();
     let handle = stdout.lock();
     let mut out = LineWriter::new(handle);
 
     if cli.files.is_empty() {
-        process_reader(BufReader::new(io::stdin().lock()), cli.compact, ctx, &mut out)?;
+        process_reader(
+            BufReader::new(io::stdin().lock()),
+            cli.compact,
+            ctx,
+            &mut out,
+        )?;
     } else {
         for path in &cli.files {
             let file = File::open(path)?;
@@ -108,19 +129,28 @@ fn process_reader<R: Read, W: Write>(
     loop {
         buf.clear();
         let n = reader.read_until(b'\n', &mut buf)?;
-        if n == 0 { break; }
-        while matches!(buf.last(), Some(b'\n' | b'\r')) { buf.pop(); }
-        if buf.is_empty() { continue; }
+        if n == 0 {
+            break;
+        }
+        while matches!(buf.last(), Some(b'\n' | b'\r')) {
+            buf.pop();
+        }
+        if buf.is_empty() {
+            continue;
+        }
 
         match serde_json::from_slice::<Value>(&buf) {
             Ok(v) => {
                 use crate::protocols::{self, JsonProtocol};
-                let protos: [&dyn JsonProtocol; 2] = [&protocols::nginx::Nginx, &protocols::tracing::Tracing];
+                let protos: [&dyn JsonProtocol; 2] =
+                    [&protocols::nginx::Nginx, &protocols::tracing::Tracing];
                 let mut best: Option<(&dyn JsonProtocol, f32)> = None;
                 for p in protos.iter().copied() {
                     let s = p.sniff(&v);
                     if let Some((_, bs)) = best {
-                        if s > bs { best = Some((p, s)); }
+                        if s > bs {
+                            best = Some((p, s));
+                        }
                     } else {
                         best = Some((p, s));
                     }
@@ -137,7 +167,9 @@ fn process_reader<R: Read, W: Write>(
                         out.write_all(b"\n")?;
                     } else {
                         let mut ser = serde_json::Serializer::with_formatter(
-                            out.deref_mut(), TwoSpacePretty::default());
+                            out.deref_mut(),
+                            TwoSpacePretty::default(),
+                        );
                         v.serialize(&mut ser).map_err(to_io_err)?;
                         out.write_all(b"\n")?;
                     }
@@ -158,11 +190,13 @@ pub(crate) fn write_kv_str<W: Write>(mut out: W, key: &str, val: Option<&str>) -
     let Some(s) = val else {
         return Ok(());
     };
-    
+
     if !s.is_empty() {
         write!(out, " {}=", key)?;
         // bare if safe, else JSON-quoted
-        if s.chars().all(|c| c.is_ascii_graphic() && c != ' ' && c != '=') {
+        if s.chars()
+            .all(|c| c.is_ascii_graphic() && c != ' ' && c != '=')
+        {
             write!(out, "{}", s)?;
         } else {
             let mut buf = Vec::new();
@@ -178,7 +212,6 @@ pub(crate) fn write_kv_num<W: Write>(mut out: W, key: &str, val: Option<f64>) ->
     let Some(mut f) = val else {
         return Ok(());
     };
-    
 
     if f == -0.0 {
         f = 0.0;
@@ -198,7 +231,9 @@ pub(crate) fn write_kv_num<W: Write>(mut out: W, key: &str, val: Option<f64>) ->
 pub(crate) fn write_json_atom<W: Write>(mut out: W, v: &Value) -> io::Result<()> {
     match v {
         Value::String(s) => {
-            if s.chars().all(|c| c.is_ascii_graphic() && c != ' ' && c != '=') {
+            if s.chars()
+                .all(|c| c.is_ascii_graphic() && c != ' ' && c != '=')
+            {
                 // Safe to print bare
                 write!(out, "{}", s)?;
             } else {

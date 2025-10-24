@@ -1,8 +1,8 @@
 pub mod nginx;
 pub mod tracing;
 
-use std::io::{self, Write};
 use serde_json::Value;
+use std::io::{self, Write};
 
 use crate::RenderCtx;
 
