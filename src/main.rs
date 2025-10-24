@@ -10,7 +10,7 @@ use std::ops::DerefMut;
 use std::io::IsTerminal;
 use crate::pretty::TwoSpacePretty;
 
-/// logsniff: read NDJSON/JSON Lines, reformat, flush per line, ignore non-JSON.
+/// jlo: read NDJSON/JSON Lines, reformat, flush per line, ignore non-JSON.
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Cli {
@@ -35,6 +35,7 @@ enum ColorChoice { Auto, Always, Never }
 
 #[derive(Copy, Clone)]
 pub(crate) struct Palette {
+    #[allow(dead_code)]
     pub(crate) enabled: bool,
     pub(crate) info: &'static str,
     pub(crate) warn: &'static str,
