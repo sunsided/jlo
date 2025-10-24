@@ -2,8 +2,14 @@
 name = "jlo"
 version = "0.1.0"
 repository = "https://github.com/sunsided/jlo"
+authors = ["Markus Mayer <widemeadows@gmail.com>"]
 edition = "2024"
-publish = false
+license = "EUPL-1.2"
+publish = true
+
+description = "A CLI tool for reading, pretty-printing, and colorizing JSON log files (NDJSON/JSON Lines), with protocol-specific formatting for Nginx and Rust tracing logs."
+keywords = ["json", "logging", "cli", "pretty-print", "logs"]
+categories = ["command-line-utilities", "development-tools::debugging", "parsing"]
 
 [dependencies]
 serde = "1.0"
